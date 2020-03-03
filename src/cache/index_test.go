@@ -36,11 +36,11 @@ func TestCache_Size(t *testing.T) {
 	assert.Empty(t, cache.Size(), "brand new cache should have zero items")
 }
 
-
 // Test adding of new items into the cache
 func TestCache_AddItem(t *testing.T) {
 	cache := prepareBrandNewCache()
 
-	cache.AddItem(types.CacheItem{"32", "43"})
+	e := cache.AddItem(types.CacheItem{Key: "32", Value: "43"})
 	assert.Equal(t, int64(1), cache.Size(), "Cache should have exactly one item.")
+	assert.Nil(t, e, "Failed to add item")
 }
