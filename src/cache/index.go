@@ -1,16 +1,18 @@
 package cache
 
 import (
-	"sync"
 	"errors"
+	"sync"
+
 	types "./types"
 )
 
 // Use RWMutex instead of Mutex for better performance
 // with read ops and for safe concurency with `map`
 type Cache struct {
-	items map[string]types.CacheItem
-	m sync.RWMutex
+	config types.CacheConfig
+	items  map[string]types.CacheItem
+	m      sync.RWMutex
 }
 
 func (cache *Cache) Size() int64 {
@@ -32,17 +34,19 @@ func (cache *Cache) AddItem(item types.CacheItem) error {
 func (cache *Cache) GetItem(key string) (types.CacheItem, bool) {
 	cache.m.RLock()
 	defer cache.m.RUnlock()
-	
+
 	item, found := cache.items[key]
-	
+
 	// TODO: expired check
 
 	return item, found
 }
 
-
-func NewCache() *Cache {
+func NewCache(config types.CacheConfig) *Cache {
 	cacheItems := make(map[string]types.CacheItem)
 
-	return &Cache{items: cacheItems}
+	return &Cache{
+		items:  cacheItems,
+		config: config,
+	}
 }
