@@ -3,6 +3,8 @@ package cache
 import (
 	"github.com/stretchr/testify/assert"
 	"testing"
+	// "fmt"
+	types "./types"
 )
 
 
@@ -32,4 +34,13 @@ func TestCache_Size(t *testing.T) {
 	cache := prepareBrandNewCache()
 
 	assert.Empty(t, cache.Size(), "brand new cache should have zero items")
+}
+
+
+// Test adding of new items into the cache
+func TestCache_AddItem(t *testing.T) {
+	cache := prepareBrandNewCache()
+
+	cache.AddItem(types.CacheItem{"32", "43"})
+	assert.Equal(t, int64(1), cache.Size(), "Cache should have exactly one item.")
 }
