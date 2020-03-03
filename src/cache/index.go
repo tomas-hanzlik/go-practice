@@ -20,7 +20,14 @@ func (cache *Cache) AddItem(item types.CacheItem) error {
 	}
 	cache.items[item.Key] = item
 	return nil
+}
 
+func (cache *Cache) GetItem(key string) (types.CacheItem, bool) {
+	item, found := cache.items[key]
+	
+	// TODO: expired check
+
+	return item, found
 }
 
 

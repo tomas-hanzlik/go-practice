@@ -3,10 +3,11 @@ package cache
 import (
 	"github.com/stretchr/testify/assert"
 	"testing"
-	// "fmt"
+	"fmt"
 	types "./types"
 )
 
+// add global list of key during init
 
 type MockCache struct {
 	*Cache
@@ -37,10 +38,25 @@ func TestCache_Size(t *testing.T) {
 }
 
 // Test adding of new items into the cache
-func TestCache_AddItem(t *testing.T) {
+func TestCache_AddItem_GetItem(t *testing.T) {
+	// TODO: Split use cases
 	cache := prepareBrandNewCache()
 
-	e := cache.AddItem(types.CacheItem{Key: "32", Value: "43"})
+	// test AddItem
+	newItem := types.CacheItem{Key: "32", Value: "43"}
+	e := cache.AddItem(newItem)
 	assert.Equal(t, int64(1), cache.Size(), "Cache should have exactly one item.")
 	assert.Nil(t, e, "Failed to add item")
+
+	// test GetItem
+	item, found := cache.GetItem("34")
+	fmt.Println(item, found)
+	assert.False(t, found, "In case of unknown item should return false.")	
+	assert.Empty(t, item, "In case of unknown item should be empty.")
+
+	item, found = cache.GetItem("32")
+	fmt.Println(item, found)
+	assert.True(t, found, "In case of known item should return true.")	
+	assert.Equal(t, item, newItem, "In case of known item should correct item.")
+
 }
