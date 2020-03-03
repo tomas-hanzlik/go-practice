@@ -9,8 +9,22 @@ import (
 
 // add global list of key during init
 
+
+var defaultKeys = map[string]string{
+    "one": "tomas",
+    "two": "2138",
+    "three": "1908",
+    "four": "912",
+}
+
 type MockCache struct {
 	*Cache
+}
+
+func (cache *MockCache) FillWithDefaultData() {
+	for key, value := range defaultKeys {
+		cache.AddItem(types.CacheItem{Key: key, Value: value})
+	}
 }
 
 func NewMockCache() *MockCache {
@@ -20,14 +34,16 @@ func NewMockCache() *MockCache {
 
 // Tests if constructor works
 func TestNewCache(t *testing.T) {
-	cacheInst := NewMockCache()
+	cache := NewMockCache()
 
-	assert.NotNil(t, cacheInst, "cache constructor should not return nil")
+	assert.NotNil(t, cache, "cache constructor should not return nil")
 }
 
 // helper function that can abstract out some logic and prepares testing state - in this case it creates basic cache instance
 func prepareBrandNewCache() *MockCache {
-	return NewMockCache()
+	cache := NewMockCache()
+
+	return cache
 }
 
 // unit test for specific method
@@ -41,6 +57,7 @@ func TestCache_Size(t *testing.T) {
 func TestCache_AddItem_GetItem(t *testing.T) {
 	// TODO: Split use cases
 	cache := prepareBrandNewCache()
+	// cache.FillWithDefaultData()
 
 	// test AddItem
 	newItem := types.CacheItem{Key: "32", Value: "43"}
@@ -55,8 +72,33 @@ func TestCache_AddItem_GetItem(t *testing.T) {
 	assert.Empty(t, item, "In case of unknown item should be empty.")
 
 	item, found = cache.GetItem("32")
-	fmt.Println(item, found)
+	fmt.Println(item, found, defaultKeys)
 	assert.True(t, found, "In case of known item should return true.")	
 	assert.Equal(t, item, newItem, "In case of known item should correct item.")
 
+}
+
+
+func TestCache_AddItem(t *testing.T) {
+	cache := prepareBrandNewCache()
+
+	e := cache.AddItem(types.CacheItem{Key: "32", Value: "43"})
+	assert.Equal(t, int64(1), cache.Size(), "Cache should have exactly one item.")
+	assert.Nil(t, e, "Failed to add item")
+}
+
+
+
+func TestCache_GetItem(t *testing.T) {
+	cache := prepareBrandNewCache()
+	cache.FillWithDefaultData() // helper
+
+	// test GetItem
+	item, found := cache.GetItem("SomeRandomKey")
+	assert.False(t, found, "In case of unknown item should return false.")	
+	assert.Empty(t, item, "In case of unknown item should be empty.")
+
+	item, found = cache.GetItem("one")
+	assert.True(t, found, "In case of known item should return true.")	
+	assert.Equal(t, item.Value, defaultKeys["one"], "In case of known item should correct item.")
 }
