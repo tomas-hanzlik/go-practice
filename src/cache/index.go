@@ -1,8 +1,9 @@
-package cache
+package cache // change to CACHE
 
 import (
-	"errors"
+	"fmt"
 	"sync"
+	"time"
 
 	types "./types"
 )
@@ -10,43 +11,80 @@ import (
 // Use RWMutex instead of Mutex for better performance
 // with read ops and for safe concurency with `map`
 type Cache struct {
-	config types.CacheConfig
-	items  map[string]types.CacheItem
-	m      sync.RWMutex
+	Config types.CacheConfig
+	Store  map[string]types.CacheItemWrapper
+	M      sync.RWMutex
 }
 
 func (cache *Cache) Size() int64 {
-	return int64(len(cache.items))
+	return int64(len(cache.Store))
 }
 
-func (cache *Cache) AddItem(item types.CacheItem) error {
-	cache.m.Lock()
-	defer cache.m.Unlock()
+func (cache *Cache) AddItem(item types.CacheItem) {
+	cache.M.Lock()
+	defer cache.M.Unlock()
 
-	// TODO: Check if cache is full and if yes -> return error
-	if false {
-		return errors.New("Cache is full.")
+	newWrappedItem := types.CacheItemWrapper{
+		CacheItem:    item,
+		ExpirationAt: time.Now().Unix() + int64(cache.Config.Ttl),
 	}
-	cache.items[item.Key] = item
-	return nil
+	cache.Store[item.Key] = newWrappedItem
+
+	// remove oldest if cache overflow... can happen just once ...
+	if cache.Config.Capacity != 0 && cache.Size() > cache.Config.Capacity {
+		oldestKey, oldestTimestamp := newWrappedItem.Key, newWrappedItem.ExpirationAt
+		for key, wrappedItem := range cache.Store {
+			if wrappedItem.ExpirationAt <= oldestTimestamp {
+				oldestKey, oldestTimestamp = key, wrappedItem.ExpirationAt
+			}
+		}
+		delete(cache.Store, oldestKey)
+	}
 }
 
 func (cache *Cache) GetItem(key string) (types.CacheItem, bool) {
-	cache.m.RLock()
-	defer cache.m.RUnlock()
+	cache.M.RLock()
+	defer cache.M.RUnlock()
 
-	item, found := cache.items[key]
+	wrappedItem, found := cache.Store[key]
+	if wrappedItem.IsExpired() {
+		delete(cache.Store, key)
+		return types.CacheItem{}, false
+	}
 
-	// TODO: expired check
+	return wrappedItem.ToCacheItem(), found
+}
 
-	return item, found
+func (cache *Cache) RemoveItem(key string) {
+	cache.M.Lock()
+	defer cache.M.Unlock()
+
+	delete(cache.Store, key)
+}
+
+func (cache *Cache) RemoveExpiredItems() {
+	return
+}
+
+func (cache *Cache) TriggerExpiredItemsRemoval() {
+	ticker := time.NewTicker(time.Duration(cache.Config.ExpCheckFrequency) * time.Second)
+
+	for _ = range ticker.C {
+		fmt.Println("TOOD")
+		cache.RemoveExpiredItems()
+	}
 }
 
 func NewCache(config types.CacheConfig) *Cache {
-	cacheItems := make(map[string]types.CacheItem)
+	cacheItems := make(map[string]types.CacheItemWrapper)
 
-	return &Cache{
-		items:  cacheItems,
-		config: config,
+	cache := &Cache{
+		Store:  cacheItems,
+		Config: config,
 	}
+	if config.ExpCheckFrequency > 0 {
+		go cache.TriggerExpiredItemsRemoval()
+	}
+
+	return cache
 }
