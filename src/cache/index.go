@@ -1,7 +1,6 @@
 package cache // change to CACHE
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -63,14 +62,18 @@ func (cache *Cache) RemoveItem(key string) {
 }
 
 func (cache *Cache) RemoveExpiredItems() {
-	return
+
+	for key, wrappedItem := range cache.Store {
+		if wrappedItem.IsExpired() {
+			cache.RemoveItem(key)
+		}
+	}
 }
 
 func (cache *Cache) TriggerExpiredItemsRemoval() {
 	ticker := time.NewTicker(time.Duration(cache.Config.ExpCheckFrequency) * time.Second)
 
 	for _ = range ticker.C {
-		fmt.Println("TOOD")
 		cache.RemoveExpiredItems()
 	}
 }
