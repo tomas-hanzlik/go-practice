@@ -2,14 +2,16 @@ package cache
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	types "./types"
+	"github.com/kami-zh/go-capturer"
 	"github.com/stretchr/testify/assert"
 )
 
 // test data
-var defaultKeys = map[string]string{
+var defaultTestKeyValues = map[string]string{
 	"one":   "tomas",
 	"two":   "2138",
 	"three": "1908",
@@ -22,7 +24,7 @@ type MockCache struct {
 
 // Helper function to fill cache with data to make testing of some fucntionality easier
 func (cache *MockCache) FillWithDefaultData() {
-	for key, value := range defaultKeys {
+	for key, value := range defaultTestKeyValues {
 		cache.AddItem(types.CacheItem{Key: key, Value: value})
 	}
 }
@@ -30,7 +32,7 @@ func (cache *MockCache) FillWithDefaultData() {
 // Helper function to fill cache with expired data.
 // nasty implementation ... miss Time mock :'(
 func (cache *MockCache) FillWithDefaultDataAsExpired() {
-	for key, value := range defaultKeys {
+	for key, value := range defaultTestKeyValues {
 		cache.Store[key] = types.CacheItemWrapper{
 			CacheItem: types.CacheItem{
 				Key:   key,
@@ -46,6 +48,7 @@ func NewMockCache() *MockCache {
 		Ttl:               30,
 		Capacity:          100,
 		ExpCheckFrequency: 0, // to disable periodic expiration check
+		GetDataFrequency:  0,
 	}
 	return &MockCache{Cache: NewCache(config)}
 }
@@ -91,7 +94,7 @@ func TestCache_GetItem(t *testing.T) {
 	cache.FillWithDefaultData() // helper
 	item, found := cache.GetItem("one")
 	assert.True(t, found, "In case of known item should return true.")
-	assert.Equal(t, item.Value, defaultKeys["one"], "In case of known item should correct item.")
+	assert.Equal(t, item.Value, defaultTestKeyValues["one"], "In case of known item should correct item.")
 
 	// Test if we can get expired Item
 	cache.FillWithDefaultDataAsExpired()
@@ -115,7 +118,6 @@ func TestCache_RemoveItem(t *testing.T) {
 	cache.RemoveItem("one")
 
 	assert.Equal(t, cache.Size(), prevSize-1, "Size of cache after deletion doesnt match.")
-
 }
 
 func TestCache_RemoveExpiredItems(t *testing.T) {
@@ -124,4 +126,44 @@ func TestCache_RemoveExpiredItems(t *testing.T) {
 
 	cache.RemoveExpiredItems()
 	assert.Empty(t, cache.Size(), "Cache should be empty after removal of expired items.")
+}
+
+func TestCache_RandomInputAdapter(t *testing.T) {
+	// Random input adapter should be tested separately and then as the whole with `cache`
+	// Time constraints... Can be improved if necessary
+	cache := prepareBrandNewCache()
+
+	// set data generation frequency to 0 so we can do it manualy
+	cache.SetInputAdapter(NewRandomInputAdapter(0, 10))
+
+	// generate data manualy
+	cache.InputAdapters[0].(*RandomInputAdapter).GenerateData()
+
+	// capture StdOut
+	out := capturer.CaptureStdout(func() {
+		cache.CollectAdaptersData()
+	})
+	assert.Contains(t, out, "Taken items from current batch:", "Stats() method should be called.")
+	assert.NotEmpty(t, cache.Size(), "cache should have randomly generated items")
+	assert.True(t, cache.InputAdapters[0].(*RandomInputAdapter).queue.IsEmpty(), "adapter's queue should be empty")
+
+	// cache.InputAdapters[0].Stats()
+}
+
+func TestCache_CommandLineInputAdapter(t *testing.T) {
+	// Random input adapter should be tested separately and then as the whole with `cache`
+	// Time constraints... Can be improved if necessary
+	testString := `
+		test1: test1
+		test2: test2
+		fsdfsdfs
+		test3: test3
+		STOP
+	`
+	cache := prepareBrandNewCache()
+	cache.SetInputAdapter(NewCommandLineInputAdapter(strings.NewReader(testString)))
+
+	cache.CollectAdaptersData()
+	assert.Equal(t, int64(3), cache.Size(), "cache size not matching")
+	assert.True(t, cache.InputAdapters[0].(*CommandLineInputAdapter).queue.IsEmpty(), "adapter's queue should be empty")
 }

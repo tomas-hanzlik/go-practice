@@ -1,6 +1,9 @@
 package types
 
-import "time"
+import (
+	"sync"
+	"time"
+)
 
 type CacheItem struct {
 	Key   string // To satify the assigment methods desciption (addItem, Adapters, ...)
@@ -29,4 +32,31 @@ type CacheConfig struct {
 	Ttl               int32 // Expiration of items.
 	Capacity          int64 // Capacity of the cache.
 	ExpCheckFrequency int32 // How often remove expired items. 0 to turn it off
+	GetDataFrequency  int32 // How often we want to get data from adapters
+}
+
+// WAY! easier to work with during tests than `channels`... thats why i havent used them here
+// Use custom buffer with included locks
+type ItemsQueue struct {
+	sync.Mutex             // for cuncurrent operations
+	items      []CacheItem // items queue
+}
+
+// Push a new value onto the stack
+func (q *ItemsQueue) Enq(item CacheItem) {
+	q.items = append(q.items, item)
+}
+
+func (q *ItemsQueue) IsEmpty() bool {
+	return len(q.items) == 0
+}
+
+func (q *ItemsQueue) Deq() CacheItem {
+	if !q.IsEmpty() {
+		item := q.items[0]
+		q.items = q.items[1:]
+		return item
+	}
+
+	return CacheItem{}
 }

@@ -1,6 +1,8 @@
-package cache // change to CACHE
+package cache
 
 import (
+	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -10,9 +12,31 @@ import (
 // Use RWMutex instead of Mutex for better performance
 // with read ops and for safe concurency with `map`
 type Cache struct {
-	Config types.CacheConfig
-	Store  map[string]types.CacheItemWrapper
-	M      sync.RWMutex
+	Config        types.CacheConfig
+	Store         map[string]types.CacheItemWrapper
+	InputAdapters []IAdapter
+	m             sync.RWMutex
+	wg            sync.WaitGroup // to allow input adapters block execution of periodic tasks
+}
+
+func (cache *Cache) SetInputAdapter(adapter IAdapter) {
+	// Wait for needy adapter if needed.
+	cache.InputAdapters = append(cache.InputAdapters, adapter)
+	cache.InputAdapters[len(cache.InputAdapters)-1].Run(&cache.wg) // TODO: pointers
+}
+
+func (cache *Cache) CollectAdaptersData() {
+	for _, adapter := range cache.InputAdapters {
+		for _, item := range adapter.GetData() {
+			cache.AddItem(*item)
+		}
+
+		a, ok := adapter.(INoisyAdapter)
+		if ok {
+			fmt.Println(a.Stats())
+		}
+	}
+	return
 }
 
 func (cache *Cache) Size() int64 {
@@ -20,8 +44,8 @@ func (cache *Cache) Size() int64 {
 }
 
 func (cache *Cache) AddItem(item types.CacheItem) {
-	cache.M.Lock()
-	defer cache.M.Unlock()
+	cache.m.Lock()
+	defer cache.m.Unlock()
 
 	newWrappedItem := types.CacheItemWrapper{
 		CacheItem:    item,
@@ -42,8 +66,8 @@ func (cache *Cache) AddItem(item types.CacheItem) {
 }
 
 func (cache *Cache) GetItem(key string) (types.CacheItem, bool) {
-	cache.M.RLock()
-	defer cache.M.RUnlock()
+	cache.m.RLock()
+	defer cache.m.RUnlock()
 
 	wrappedItem, found := cache.Store[key]
 	if wrappedItem.IsExpired() {
@@ -55,14 +79,13 @@ func (cache *Cache) GetItem(key string) (types.CacheItem, bool) {
 }
 
 func (cache *Cache) RemoveItem(key string) {
-	cache.M.Lock()
-	defer cache.M.Unlock()
+	cache.m.Lock()
+	defer cache.m.Unlock()
 
 	delete(cache.Store, key)
 }
 
 func (cache *Cache) RemoveExpiredItems() {
-
 	for key, wrappedItem := range cache.Store {
 		if wrappedItem.IsExpired() {
 			cache.RemoveItem(key)
@@ -70,24 +93,34 @@ func (cache *Cache) RemoveExpiredItems() {
 	}
 }
 
-func (cache *Cache) TriggerExpiredItemsRemoval() {
-	ticker := time.NewTicker(time.Duration(cache.Config.ExpCheckFrequency) * time.Second)
+func (cache *Cache) Dump(filename string) {
+	file, err := os.Create(filename)
 
-	for _ = range ticker.C {
-		cache.RemoveExpiredItems()
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	for _, item := range cache.Store {
+		file.WriteString(fmt.Sprintf("%s:%s\n", item.Key, item.Value))
 	}
 }
 
 func NewCache(config types.CacheConfig) *Cache {
-	cacheItems := make(map[string]types.CacheItemWrapper)
-
+	cacheItems := make(map[string]types.CacheItemWrapper, 0)
 	cache := &Cache{
 		Store:  cacheItems,
 		Config: config,
 	}
-	if config.ExpCheckFrequency > 0 {
-		go cache.TriggerExpiredItemsRemoval()
+
+	// Collect data from adapters.
+	if cache.Config.GetDataFrequency > 0 
+		ExecutePeriodic(&cache.wg, cache.Config.GetDataFrequency, cache.CollectAdaptersData)
 	}
 
+	// Remove expired items.
+	if cache.Config.ExpCheckFrequency > 0 {
+		ExecutePeriodic(&cache.wg, cache.Config.ExpCheckFrequency, cache.RemoveExpiredItems)
+	}
 	return cache
 }
