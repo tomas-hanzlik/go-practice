@@ -45,7 +45,7 @@ func (cache *MockCache) FillWithDefaultDataAsExpired() {
 
 func NewMockCache() *MockCache {
 	config := types.CacheConfig{
-		Ttl:               30,
+		TTL:               30,
 		Capacity:          100,
 		ExpCheckFrequency: 0, // to disable periodic expiration check
 		GetDataFrequency:  0,
@@ -109,6 +109,14 @@ func TestCache_GetItem(t *testing.T) {
 	assert.Empty(t, item, "In case of unknown item should be empty.")
 }
 
+func TestCache_GetAllItems(t *testing.T) {
+	cache := prepareBrandNewCache()
+	cache.FillWithDefaultData()
+
+	items := cache.GetAllItems()
+	assert.Equal(t, len(*items), len(defaultTestKeyValues), "not getting all items")
+}
+
 func TestCache_RemoveItem(t *testing.T) {
 	cache := prepareBrandNewCache()
 	cache.FillWithDefaultData() // helper
@@ -118,6 +126,14 @@ func TestCache_RemoveItem(t *testing.T) {
 	cache.RemoveItem("one")
 
 	assert.Equal(t, cache.Size(), prevSize-1, "Size of cache after deletion doesnt match.")
+}
+
+func TestCache_RemoveAllItems(t *testing.T) {
+	cache := prepareBrandNewCache()
+	cache.FillWithDefaultData()
+
+	cache.RemoveAllItems()
+	assert.Empty(t, cache.Size(), "cache is not empty")
 }
 
 func TestCache_RemoveExpiredItems(t *testing.T) {

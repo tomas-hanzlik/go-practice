@@ -6,8 +6,8 @@ import (
 )
 
 type CacheItem struct {
-	Key   string // To satify the assigment methods desciption (addItem, Adapters, ...)
-	Value string
+	Key   string `json:"key"` // To satify the assigment methods desciption (addItem, Adapters, ...)
+	Value string `json:"value"`
 }
 
 // wrap cache item for internal usage of cache manager
@@ -29,10 +29,10 @@ func (item *CacheItemWrapper) ToCacheItem() CacheItem {
 }
 
 type CacheConfig struct {
-	Ttl               int32 // Expiration of items.
-	Capacity          int64 // Capacity of the cache.
-	ExpCheckFrequency int32 // How often remove expired items. 0 to turn it off
-	GetDataFrequency  int32 // How often we want to get data from adapters
+	TTL               int32 `json:"ttl"`                      // Expiration of items.
+	Capacity          int64 `json:"capacity"`                 // Capacity of the cache.
+	ExpCheckFrequency int32 `json:"expirationCheckFrequency"` // How often remove expired items. 0 to turn it off
+	GetDataFrequency  int32 `json:"getAdaptersDataFrequency"` // How often we want to get data from adapters
 }
 
 // WAY! easier to work with during tests than `channels`... thats why i havent used them here

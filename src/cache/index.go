@@ -1,5 +1,7 @@
 package cache
 
+// TODO: MAKE IT CLEANER
+
 import (
 	"fmt"
 	"os"
@@ -49,7 +51,7 @@ func (cache *Cache) AddItem(item types.CacheItem) {
 
 	newWrappedItem := types.CacheItemWrapper{
 		CacheItem:    item,
-		ExpirationAt: time.Now().Unix() + int64(cache.Config.Ttl),
+		ExpirationAt: time.Now().Unix() + int64(cache.Config.TTL),
 	}
 	cache.Store[item.Key] = newWrappedItem
 
@@ -67,15 +69,30 @@ func (cache *Cache) AddItem(item types.CacheItem) {
 
 func (cache *Cache) GetItem(key string) (types.CacheItem, bool) {
 	cache.m.RLock()
-	defer cache.m.RUnlock()
-
 	wrappedItem, found := cache.Store[key]
-	if wrappedItem.IsExpired() {
+	cache.m.RUnlock()
+
+	if found && wrappedItem.IsExpired() {
+		cache.m.Lock()
+		defer cache.m.Unlock()
+
 		delete(cache.Store, key)
 		return types.CacheItem{}, false
 	}
 
 	return wrappedItem.ToCacheItem(), found
+}
+
+func (cache *Cache) GetAllItems() *[]types.CacheItem {
+	cache.m.RLock()
+	defer cache.m.RUnlock()
+
+	items := []types.CacheItem{}
+
+	for _, wrappedItem := range cache.Store {
+		items = append(items, wrappedItem.ToCacheItem())
+	}
+	return &items
 }
 
 func (cache *Cache) RemoveItem(key string) {
@@ -85,10 +102,22 @@ func (cache *Cache) RemoveItem(key string) {
 	delete(cache.Store, key)
 }
 
+func (cache *Cache) RemoveAllItems() {
+	cache.m.Lock()
+	defer cache.m.Unlock()
+
+	for key := range cache.Store {
+		delete(cache.Store, key)
+	}
+}
+
 func (cache *Cache) RemoveExpiredItems() {
+	cache.m.Lock()
+	defer cache.m.Unlock()
+
 	for key, wrappedItem := range cache.Store {
 		if wrappedItem.IsExpired() {
-			cache.RemoveItem(key)
+			delete(cache.Store, key)
 		}
 	}
 }
@@ -101,6 +130,8 @@ func (cache *Cache) Dump(filename string) {
 	}
 	defer file.Close()
 
+	cache.m.Lock()
+	defer cache.m.Unlock()
 	for _, item := range cache.Store {
 		file.WriteString(fmt.Sprintf("%s:%s\n", item.Key, item.Value))
 	}
@@ -114,7 +145,7 @@ func NewCache(config types.CacheConfig) *Cache {
 	}
 
 	// Collect data from adapters.
-	if cache.Config.GetDataFrequency > 0 
+	if cache.Config.GetDataFrequency > 0 {
 		ExecutePeriodic(&cache.wg, cache.Config.GetDataFrequency, cache.CollectAdaptersData)
 	}
 

@@ -12,7 +12,7 @@
 
 ```go
 type CacheConfig struct {
-	Ttl               int32 // Expiration of items.
+	TTL               int32 // Expiration of items.
 	Capacity          int64 // Capacity of the cache.
 	ExpCheckFrequency int32 // How often remove expired items. 0 == never
 	GetDataFrequency  int32 // How often we want to get data from adapters. 0 == never
