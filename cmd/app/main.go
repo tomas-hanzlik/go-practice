@@ -1,87 +1,88 @@
 package main
 
 import (
+	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"strings"
 
+	cache "tohan.net/go-practice/src/cache"
+	types "tohan.net/go-practice/src/cache/types"
+	crypto "tohan.net/go-practice/src/cryptomood"
+
+	"github.com/caarlos0/env"
 	"github.com/gin-gonic/gin"
-
-	cache "../../src/cache"
-	types "../../src/cache/types"
+	"github.com/joho/godotenv"
 )
 
-type BulkInsert struct {
-	Data []types.CacheItem `json:"data"`
-}
-type CacheHandler struct {
-	cache *cache.Cache
+const CryptomoodCertFile = "./cert.pem"
+const CryptomoodServer = "internal-dev.api.cryptomood.com:30000"
+
+const RandomInputAdapterInterval = 10
+const RandomInputAdapterAmount = 10
+
+type config struct {
+	IsDebug                  bool     `env:"DEBUG"`
+	Adapters                 []string `env:"ADAPTERS" envDefault:"" envSeparator:","`
+	TTL                      int32    `env:"TTL" envDefault:"100"`
+	Capacity                 int64    `env"CAPACITY" envDefault:"0"` // unlimited by default
+	ExpirationCheckFrequency int32    `env:"EXPIRATION_CHECK_FREQUENCY" envDefault:"25"`
+	GetAdaptersDataFrequency int32    `env:"GET_ADAPTERS_DATA_FREQUENCY" envDefault:"10"`
+	AdaptersBufferSize		 int64	`env:"ADAPTERS_BUFFER_SIZE" envDefault:"0"` // unlimited by default
+	AllowedAccounts			 []string `env:"ALLOWED_ACCOUNTS" envDefault:"" envSeparator:","`
 }
 
-func (ch *CacheHandler) Resp(c *gin.Context, status int, resp gin.H) {
-	resp["status"] = status
-	c.JSON(status, resp)
-}
-
-func (ch *CacheHandler) GetAllItems(c *gin.Context) {
-	items := ch.cache.GetAllItems()
-	ch.Resp(c, http.StatusOK, gin.H{"data": items, "count": len(*items)})
-}
-func (ch *CacheHandler) DeleteAllItems(c *gin.Context) {
-	ch.cache.RemoveAllItems()
-	ch.Resp(c, http.StatusOK, gin.H{})
-}
-
-func (ch *CacheHandler) AddItems(c *gin.Context) {
-	var bulkInsert BulkInsert
-	if err := c.ShouldBindJSON(&bulkInsert); err != nil {
-		ch.Resp(c, http.StatusBadRequest, gin.H{"message": err.Error()})
-		return
+func envConfig() *config {
+	// loads values from .env into the system
+	if err := godotenv.Load(); err != nil {
+		log.Print("No .env file found")
 	}
-	for _, item := range bulkInsert.Data {
-		ch.cache.AddItem(item)
+
+	cfg := config{}
+	if err := env.Parse(&cfg); err != nil {
+		fmt.Printf("%+v\n", err)
 	}
-	ch.Resp(c, http.StatusCreated, gin.H{"message": "Added successfuly", "count": len(bulkInsert.Data)})
+
+	return &cfg
 }
 
-func (ch *CacheHandler) GetItem(c *gin.Context) {
-	item, ok := ch.cache.GetItem(c.Param("key"))
-	if !ok {
-		ch.Resp(c, http.StatusNotFound, gin.H{"message": "Item not found"})
-		return
-	}
-	ch.Resp(c, http.StatusOK, gin.H{"data": item})
-}
-
-func (ch *CacheHandler) DeleteItem(c *gin.Context) {
-	ch.cache.RemoveItem(c.Param("key"))
-	ch.Resp(c, http.StatusOK, gin.H{})
-}
-
-func (ch *CacheHandler) CacheOverview(c *gin.Context) {
-	ch.Resp(c, http.StatusOK, gin.H{
-		"data": gin.H{"config": ch.cache.Config, "size": ch.cache.Size()},
-	})
-}
-
-func main() {
+func initCache(cfg *config) *cache.Cache {
 	config := types.CacheConfig{
-		TTL:               10,
-		Capacity:          10000,
-		ExpCheckFrequency: 1,
-		GetDataFrequency:  1,
+		TTL:                      cfg.TTL,
+		Capacity:                 cfg.Capacity,
+		ExpCheckFrequency:        cfg.ExpirationCheckFrequency,
+		GetAdaptersDataFrequency: cfg.GetAdaptersDataFrequency,
+		AdaptersBufferSize:       cfg.AdaptersBufferSize,
 	}
 	c := cache.NewCache(config)
 
-	// Generate 150 random items into the cache every 5 seconds
-	c.SetInputAdapter(cache.NewRandomInputAdapter(5, 150))
-	env := &CacheHandler{c}
+	// Set adapters.
+	for _, adapterName := range cfg.Adapters {
+		if adapterName == "input" {
+			c.SetInputAdapter(cache.NewCommandLineInputAdapter(os.Stdin, cfg.AdaptersBufferSize))
+		} else if adapterName == "random" {
+			c.SetInputAdapter(cache.NewRandomInputAdapter(RandomInputAdapterInterval, RandomInputAdapterAmount, cfg.AdaptersBufferSize))
+		}
+	}
+	return c
+}
 
+func initAPI(cfg *config, c *cache.Cache) *gin.Engine {
+	// Configure API
+	if cfg.IsDebug {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+	env := &CacheHandler{c}
 	router := gin.Default()
-	authorized := router.Group("/", gin.BasicAuth(gin.Accounts{
-		"1":      "1",
-		"austin": "1234",
-		"lena":   "hello2",
-		"manu":   "4321",
-	}))
+	allowedAccounts :=gin.Accounts{}
+	for _, accDetailsAsString := range cfg.AllowedAccounts {
+		r := strings.Split(accDetailsAsString, ":") 
+		allowedAccounts[r[0]] = r[1]
+	}
+	authorized := router.Group("/", gin.BasicAuth(allowedAccounts))
 	{
 		authorized.GET("/cache/", env.GetAllItems)
 		authorized.POST("/cache/", env.AddItems)
@@ -91,9 +92,22 @@ func main() {
 		authorized.GET("/overview", env.CacheOverview)
 	}
 
-	router.GET("/swagger", func(c *gin.Context) {
-		c.String(http.StatusOK, "Hello")
+	router.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "pong"})
 	})
 
-	router.Run(":8080")
+	return router
+}
+
+
+
+func main() {
+	cfg := envConfig()
+	c := initCache(cfg)
+
+	// subscribe to sentiment API to and save records into the cache... 
+	// not ideal implementation -> ASK
+	go crypto.ConsumeSentiments(c, CryptomoodCertFile, CryptomoodServer)
+
+	initAPI(cfg, c).Run(":8080")
 }

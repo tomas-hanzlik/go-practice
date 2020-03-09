@@ -2,4 +2,6 @@
 pkg
 bin
 src/*
-!/src/cache/
+cmd/app/*.pem
+!src/cache
+!src/cryptomood
