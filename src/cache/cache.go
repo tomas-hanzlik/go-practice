@@ -1,14 +1,12 @@
 package cache
 
-// TODO: MAKE IT CLEANER
-
 import (
 	"fmt"
 	"os"
 	"sync"
 	"time"
 
-	types "./types"
+	types "tohan.net/go-practice/src/cache/types"
 )
 
 // Use RWMutex instead of Mutex for better performance
@@ -21,10 +19,29 @@ type Cache struct {
 	wg            sync.WaitGroup // to allow input adapters block execution of periodic tasks
 }
 
+func NewCache(config types.CacheConfig) *Cache {
+	cacheItems := make(map[string]types.CacheItemWrapper, 0)
+	cache := &Cache{
+		Store:  cacheItems,
+		Config: config,
+	}
+
+	// Collect data from adapters.
+	if cache.Config.GetAdaptersDataFrequency > 0 {
+		executePeriodic(&cache.wg, cache.Config.GetAdaptersDataFrequency, cache.CollectAdaptersData)
+	}
+
+	// Remove expired items.  // do not use WG here
+	if cache.Config.ExpCheckFrequency > 0 {
+		executePeriodic(&cache.wg, cache.Config.ExpCheckFrequency, cache.RemoveExpiredItems)
+	}
+	return cache
+}
+
+
 func (cache *Cache) SetInputAdapter(adapter IAdapter) {
-	// Wait for needy adapter if needed.
 	cache.InputAdapters = append(cache.InputAdapters, adapter)
-	cache.InputAdapters[len(cache.InputAdapters)-1].Run(&cache.wg) // TODO: pointers
+	cache.InputAdapters[len(cache.InputAdapters)-1].Run(&cache.wg)
 }
 
 func (cache *Cache) CollectAdaptersData() {
@@ -56,7 +73,7 @@ func (cache *Cache) AddItem(item types.CacheItem) {
 	cache.Store[item.Key] = newWrappedItem
 
 	// remove oldest if cache overflow... can happen just once ...
-	if cache.Config.Capacity != 0 && cache.Size() > cache.Config.Capacity {
+	if cache.Config.Capacity > 0 && cache.Size() > cache.Config.Capacity {
 		oldestKey, oldestTimestamp := newWrappedItem.Key, newWrappedItem.ExpirationAt
 		for key, wrappedItem := range cache.Store {
 			if wrappedItem.ExpirationAt <= oldestTimestamp {
@@ -137,21 +154,3 @@ func (cache *Cache) Dump(filename string) {
 	}
 }
 
-func NewCache(config types.CacheConfig) *Cache {
-	cacheItems := make(map[string]types.CacheItemWrapper, 0)
-	cache := &Cache{
-		Store:  cacheItems,
-		Config: config,
-	}
-
-	// Collect data from adapters.
-	if cache.Config.GetDataFrequency > 0 {
-		ExecutePeriodic(&cache.wg, cache.Config.GetDataFrequency, cache.CollectAdaptersData)
-	}
-
-	// Remove expired items.
-	if cache.Config.ExpCheckFrequency > 0 {
-		ExecutePeriodic(&cache.wg, cache.Config.ExpCheckFrequency, cache.RemoveExpiredItems)
-	}
-	return cache
-}

@@ -5,7 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	types "./types"
+	types "tohan.net/go-practice/src/cache/types"
+
 	"github.com/kami-zh/go-capturer"
 	"github.com/stretchr/testify/assert"
 )
@@ -45,10 +46,10 @@ func (cache *MockCache) FillWithDefaultDataAsExpired() {
 
 func NewMockCache() *MockCache {
 	config := types.CacheConfig{
-		TTL:               30,
-		Capacity:          100,
-		ExpCheckFrequency: 0, // to disable periodic expiration check
-		GetDataFrequency:  0,
+		TTL:                      30,
+		Capacity:                 100,
+		ExpCheckFrequency:        0, // to disable periodic expiration check
+		GetAdaptersDataFrequency: 0,
 	}
 	return &MockCache{Cache: NewCache(config)}
 }
@@ -57,7 +58,6 @@ func NewMockCache() *MockCache {
 func prepareBrandNewCache() *MockCache {
 	cache := NewMockCache()
 
-	// fmt.Println(cache.config)
 	return cache
 }
 
@@ -177,7 +177,7 @@ func TestCache_CommandLineInputAdapter(t *testing.T) {
 		STOP
 	`
 	cache := prepareBrandNewCache()
-	cache.SetInputAdapter(NewCommandLineInputAdapter(strings.NewReader(testString)))
+	cache.SetInputAdapter(NewCommandLineInputAdapter(strings.NewReader(testString), 0))
 
 	cache.CollectAdaptersData()
 	assert.Equal(t, int64(3), cache.Size(), "cache size not matching")

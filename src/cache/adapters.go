@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	types "./types"
+	types "tohan.net/go-practice/src/cache/types"
 )
 
 type IAdapter interface {
@@ -28,9 +28,9 @@ type CommandLineInputAdapter struct {
 	reader *bufio.Reader
 }
 
-func NewCommandLineInputAdapter(rd io.Reader) IAdapter {
+func NewCommandLineInputAdapter(rd io.Reader, bufferSize int64) IAdapter {
 	var adapter IAdapter = &CommandLineInputAdapter{
-		queue:  types.ItemsQueue{},
+		queue:  types.ItemsQueue{Capacity: bufferSize},
 		reader: bufio.NewReader(rd),
 	}
 
@@ -106,9 +106,9 @@ type RandomInputAdapter struct {
 	amount         int32
 }
 
-func NewRandomInputAdapter(frequency int32, amount int32) IAdapter {
+func NewRandomInputAdapter(frequency int32, amount int32, bufferSize int64) IAdapter {
 	var adapter IAdapter = &RandomInputAdapter{
-		queue:          types.ItemsQueue{},
+		queue:          types.ItemsQueue{Capacity: bufferSize},
 		overallCounter: 0,
 		lastlyReturned: 0,
 		frequency:      frequency,
@@ -118,7 +118,7 @@ func NewRandomInputAdapter(frequency int32, amount int32) IAdapter {
 }
 
 func (adapter *RandomInputAdapter) Run(wg *sync.WaitGroup) {
-	ExecutePeriodic(wg, adapter.frequency, adapter.GenerateData)
+	executePeriodic(wg, adapter.frequency, adapter.GenerateData)
 }
 
 func (adapter *RandomInputAdapter) Stats() string {

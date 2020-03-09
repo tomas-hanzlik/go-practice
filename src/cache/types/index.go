@@ -6,7 +6,7 @@ import (
 )
 
 type CacheItem struct {
-	Key   string `json:"key"` // To satify the assigment methods desciption (addItem, Adapters, ...)
+	Key   string `json:"key"`
 	Value string `json:"value"`
 }
 
@@ -29,34 +29,43 @@ func (item *CacheItemWrapper) ToCacheItem() CacheItem {
 }
 
 type CacheConfig struct {
-	TTL               int32 `json:"ttl"`                      // Expiration of items.
-	Capacity          int64 `json:"capacity"`                 // Capacity of the cache.
-	ExpCheckFrequency int32 `json:"expirationCheckFrequency"` // How often remove expired items. 0 to turn it off
-	GetDataFrequency  int32 `json:"getAdaptersDataFrequency"` // How often we want to get data from adapters
+	TTL                      int32 `json:"ttl"`                      // Expiration of items.
+	Capacity                 int64 `json:"capacity"`                 // Capacity of the cache.
+	ExpCheckFrequency        int32 `json:"expirationCheckFrequency"` // How often remove expired items. 0 to turn it off
+	GetAdaptersDataFrequency int32 `json:"getAdaptersDataFrequency"` // How often we want to get data from adapters
+	AdaptersBufferSize	int64 `json:"adaptersBufferSize"`  // If we want to limit the amount of data before colleciton
 }
 
-// WAY! easier to work with during tests than `channels`... thats why i havent used them here
+// Easier to work with during tests than `channels`... thats why i havent used them here
 // Use custom buffer with included locks
 type ItemsQueue struct {
-	sync.Mutex             // for cuncurrent operations
+	sync.Mutex             // for cuncurrent operations... Not Used by default tho
 	items      []CacheItem // items queue
+	Capacity   int64       // 0 for unlimited
 }
 
-// Push a new value onto the stack
-func (q *ItemsQueue) Enq(item CacheItem) {
-	q.items = append(q.items, item)
+func (q *ItemsQueue) Size() int64 {
+	return int64(len(q.items))
 }
 
 func (q *ItemsQueue) IsEmpty() bool {
-	return len(q.items) == 0
+	return q.Size() == 0
+}
+
+func (q *ItemsQueue) Enq(item CacheItem) {
+	q.items = append(q.items, item)
+
+	if q.Capacity > 0 && q.Size() > q.Capacity {
+		q.Deq()
+	}
 }
 
 func (q *ItemsQueue) Deq() CacheItem {
-	if !q.IsEmpty() {
-		item := q.items[0]
-		q.items = q.items[1:]
-		return item
+	if q.IsEmpty() {
+		return CacheItem{}
 	}
 
-	return CacheItem{}
+	item := q.items[0]
+	q.items = q.items[1:]
+	return item
 }
