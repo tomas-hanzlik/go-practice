@@ -91,6 +91,10 @@ type CacheConfig struct {
 
 # REST API
 
+
+## It's important to add cert.pem file for Cryptomood api... cmd/app/cert.pem
+
+
 ## Endpoints
 
 - Basic auth ... accounts in `.env`
@@ -135,6 +139,9 @@ ALLOWED_ACCOUNTS=1:1,2:2		# basic auth accounts
 ### Running in Docker
 
 ```sh
+
+# Add cert file
+mv [PATH] cmd/app/cert.pem
 
 # Build image
 docker build -t go-practice .
