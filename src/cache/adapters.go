@@ -15,7 +15,6 @@ import (
 
 type IAdapter interface {
 	GetData() []*types.CacheItem
-	Run(wg *sync.WaitGroup)
 }
 
 type INoisyAdapter interface {
@@ -26,6 +25,7 @@ type INoisyAdapter interface {
 type CommandLineInputAdapter struct {
 	queue  types.ItemsQueue
 	reader *bufio.Reader
+	sync.Mutex
 }
 
 func NewCommandLineInputAdapter(rd io.Reader, bufferSize int64) IAdapter {
@@ -33,22 +33,16 @@ func NewCommandLineInputAdapter(rd io.Reader, bufferSize int64) IAdapter {
 		queue:  types.ItemsQueue{Capacity: bufferSize},
 		reader: bufio.NewReader(rd),
 	}
+	go adapter.(*CommandLineInputAdapter).readFromStdin()
 
 	return adapter
 }
 
-func (adapter *CommandLineInputAdapter) Run(wg *sync.WaitGroup) {
-	wg.Add(1)
-	defer wg.Done()
-	adapter.ReadFromStdin()
-}
-
-func (adapter *CommandLineInputAdapter) ReadFromStdin() {
+func (adapter *CommandLineInputAdapter) readFromStdin() {
 	fi, _ := os.Stdin.Stat()
 	if (fi.Mode() & os.ModeCharDevice) != 0 { // do not show if streamed via PIPE
 		fmt.Println("Enter items in format `KEY:VALUE` separated by `\n`. Stop reading with cmd `STOP`:")
 	}
-
 	savedItemsCnt := int64(0)
 	for {
 		text, err := adapter.reader.ReadString('\n')
@@ -56,7 +50,8 @@ func (adapter *CommandLineInputAdapter) ReadFromStdin() {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			panic("Unexpected data on input: " + err.Error())
+			fmt.Println("Skipping. Unexpected data on input: " + err.Error())
+			continue
 		}
 
 		// Normalize string
@@ -87,9 +82,8 @@ func (adapter *CommandLineInputAdapter) ReadFromStdin() {
 func (adapter *CommandLineInputAdapter) GetData() []*types.CacheItem {
 	buffer := []*types.CacheItem{}
 
-	adapter.queue.Lock()
-	defer adapter.queue.Unlock()
-
+	adapter.Lock()
+	defer adapter.Unlock()
 	for !adapter.queue.IsEmpty() {
 		item := adapter.queue.Deq()
 		buffer = append(buffer, &item)
@@ -104,6 +98,7 @@ type RandomInputAdapter struct {
 	lastlyReturned int64
 	frequency      int32
 	amount         int32
+	sync.Mutex
 }
 
 func NewRandomInputAdapter(frequency int32, amount int32, bufferSize int64) IAdapter {
@@ -114,24 +109,23 @@ func NewRandomInputAdapter(frequency int32, amount int32, bufferSize int64) IAda
 		frequency:      frequency,
 		amount:         amount,
 	}
+	if frequency > 0 {
+		go executePeriodic(frequency, adapter.(*RandomInputAdapter).generateData)
+	}
+
 	return adapter
 }
 
-func (adapter *RandomInputAdapter) Run(wg *sync.WaitGroup) {
-	executePeriodic(wg, adapter.frequency, adapter.GenerateData)
-}
-
 func (adapter *RandomInputAdapter) Stats() string {
-	return "Taken items from current batch: " + strconv.Itoa(int(adapter.lastlyReturned)) + " / overall: " + strconv.Itoa(int(adapter.overallCounter))
+	return "[RandomInputAdapter] Collecting items: " + strconv.Itoa(int(adapter.lastlyReturned)) + " / overall: " + strconv.Itoa(int(adapter.overallCounter))
 }
 
 func (adapter *RandomInputAdapter) GetData() []*types.CacheItem {
 	buffer := []*types.CacheItem{}
-
 	adapter.lastlyReturned = 0
 
-	adapter.queue.Lock()
-	defer adapter.queue.Unlock()
+	adapter.Lock()
+	defer adapter.Unlock()
 
 	for !adapter.queue.IsEmpty() {
 		adapter.lastlyReturned++
@@ -143,9 +137,9 @@ func (adapter *RandomInputAdapter) GetData() []*types.CacheItem {
 	return buffer
 }
 
-func (adapter *RandomInputAdapter) GenerateData() {
-	adapter.queue.Lock()
-	defer adapter.queue.Unlock()
+func (adapter *RandomInputAdapter) generateData() {
+	adapter.Lock()
+	defer adapter.Unlock()
 
 	for i := int32(0); i < adapter.amount; i++ {
 		adapter.queue.Enq(types.CacheItem{

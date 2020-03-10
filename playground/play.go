@@ -21,14 +21,12 @@ func main() {
 	}
 	c := cache.NewCache(config)
 
-	// Add !!!BLOCKING!!! adapter to read from STDIN...
 	// - if PIPE -> read everything from it and then stop reading
 	// - if normal stdin -> take input from user and wait for command `STOP` to stop reading
-	// after reading ends -> continue with program execution
 	c.SetInputAdapter(cache.NewCommandLineInputAdapter(os.Stdin, 0))
 
 	// Generate 7 random items into the cache every 2 seconds
-	c.SetInputAdapter(cache.NewRandomInputAdapter(2, 7), 0)
+	c.SetInputAdapter(cache.NewRandomInputAdapter(2, 7, 0))
 
 	time.Sleep(10 * time.Second)
 

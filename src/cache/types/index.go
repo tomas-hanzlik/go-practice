@@ -1,7 +1,6 @@
 package types
 
 import (
-	"sync"
 	"time"
 )
 
@@ -16,7 +15,6 @@ type CacheItemWrapper struct {
 	ExpirationAt int64
 }
 
-// add method if expired
 func (item *CacheItemWrapper) IsExpired() bool {
 	return item.ExpirationAt <= time.Now().Unix()
 }
@@ -33,15 +31,13 @@ type CacheConfig struct {
 	Capacity                 int64 `json:"capacity"`                 // Capacity of the cache.
 	ExpCheckFrequency        int32 `json:"expirationCheckFrequency"` // How often remove expired items. 0 to turn it off
 	GetAdaptersDataFrequency int32 `json:"getAdaptersDataFrequency"` // How often we want to get data from adapters
-	AdaptersBufferSize	int64 `json:"adaptersBufferSize"`  // If we want to limit the amount of data before colleciton
+	AdaptersBufferSize       int64 `json:"adaptersBufferSize"`       // If we want to limit the amount of data before colleciton
 }
 
-// Easier to work with during tests than `channels`... thats why i havent used them here
-// Use custom buffer with included locks
+// Use as a custom buffer
 type ItemsQueue struct {
-	sync.Mutex             // for cuncurrent operations... Not Used by default tho
-	items      []CacheItem // items queue
-	Capacity   int64       // 0 for unlimited
+	items    []CacheItem // items queue
+	Capacity int64       // 0 for unlimited
 }
 
 func (q *ItemsQueue) Size() int64 {

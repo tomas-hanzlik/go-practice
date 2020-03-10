@@ -16,7 +16,6 @@ type Cache struct {
 	Store         map[string]types.CacheItemWrapper
 	InputAdapters []IAdapter
 	m             sync.RWMutex
-	wg            sync.WaitGroup // to allow input adapters block execution of periodic tasks
 }
 
 func NewCache(config types.CacheConfig) *Cache {
@@ -28,20 +27,18 @@ func NewCache(config types.CacheConfig) *Cache {
 
 	// Collect data from adapters.
 	if cache.Config.GetAdaptersDataFrequency > 0 {
-		executePeriodic(&cache.wg, cache.Config.GetAdaptersDataFrequency, cache.CollectAdaptersData)
+		go executePeriodic(cache.Config.GetAdaptersDataFrequency, cache.CollectAdaptersData)
 	}
 
-	// Remove expired items.  // do not use WG here
+	// Remove expired items.
 	if cache.Config.ExpCheckFrequency > 0 {
-		executePeriodic(&cache.wg, cache.Config.ExpCheckFrequency, cache.RemoveExpiredItems)
+		go executePeriodic(cache.Config.ExpCheckFrequency, cache.RemoveExpiredItems)
 	}
 	return cache
 }
 
-
 func (cache *Cache) SetInputAdapter(adapter IAdapter) {
 	cache.InputAdapters = append(cache.InputAdapters, adapter)
-	cache.InputAdapters[len(cache.InputAdapters)-1].Run(&cache.wg)
 }
 
 func (cache *Cache) CollectAdaptersData() {
@@ -50,8 +47,8 @@ func (cache *Cache) CollectAdaptersData() {
 			cache.AddItem(*item)
 		}
 
-		a, ok := adapter.(INoisyAdapter)
-		if ok {
+		a, isImplemented := adapter.(INoisyAdapter)
+		if isImplemented {
 			fmt.Println(a.Stats())
 		}
 	}
@@ -153,4 +150,3 @@ func (cache *Cache) Dump(filename string) {
 		file.WriteString(fmt.Sprintf("%s:%s\n", item.Key, item.Value))
 	}
 }
-

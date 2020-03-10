@@ -8,6 +8,7 @@ require (
 	github.com/golang/protobuf v1.3.4
 	github.com/joho/godotenv v1.3.0
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d
+	github.com/rogpeppe/godef v1.1.1 // indirect
 	github.com/stretchr/testify v1.4.0
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a
 	google.golang.org/grpc v1.27.1

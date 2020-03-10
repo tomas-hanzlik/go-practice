@@ -2,10 +2,10 @@ package cryptomood
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
-	"encoding/json"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"

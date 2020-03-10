@@ -19,7 +19,7 @@ c := cache.NewCache(config)
 c.SetInputAdapter(cache.NewCommandLineInputAdapter(os.Stdin, 0))
 
 // Generate 7 random items into the cache every 2 seconds
-c.SetInputAdapter(cache.NewRandomInputAdapter(2, 7), 0)
+c.SetInputAdapter(cache.NewRandomInputAdapter(2, 7, 0))
 
 c.AddItem(types.CacheItem{Key: "TEST1344", Value: "value"})
 c.Dump("dumpster.txt")
@@ -47,8 +47,6 @@ c.Dump("dumpster.txt")
 - `func (cache *Cache) RemoveExpiredItems()`
 
 - `func (cache *Cache) Dump(filename string)`
-
-
 
 
 ## Cache config

@@ -31,7 +31,6 @@ func (cache *MockCache) FillWithDefaultData() {
 }
 
 // Helper function to fill cache with expired data.
-// nasty implementation ... miss Time mock :'(
 func (cache *MockCache) FillWithDefaultDataAsExpired() {
 	for key, value := range defaultTestKeyValues {
 		cache.Store[key] = types.CacheItemWrapper{
@@ -150,10 +149,10 @@ func TestCache_RandomInputAdapter(t *testing.T) {
 	cache := prepareBrandNewCache()
 
 	// set data generation frequency to 0 so we can do it manualy
-	cache.SetInputAdapter(NewRandomInputAdapter(0, 10))
+	cache.SetInputAdapter(NewRandomInputAdapter(0, 10, 0))
 
 	// generate data manualy
-	cache.InputAdapters[0].(*RandomInputAdapter).GenerateData()
+	cache.InputAdapters[0].(*RandomInputAdapter).generateData()
 
 	// capture StdOut
 	out := capturer.CaptureStdout(func() {
@@ -163,7 +162,6 @@ func TestCache_RandomInputAdapter(t *testing.T) {
 	assert.NotEmpty(t, cache.Size(), "cache should have randomly generated items")
 	assert.True(t, cache.InputAdapters[0].(*RandomInputAdapter).queue.IsEmpty(), "adapter's queue should be empty")
 
-	// cache.InputAdapters[0].Stats()
 }
 
 func TestCache_CommandLineInputAdapter(t *testing.T) {
@@ -178,6 +176,8 @@ func TestCache_CommandLineInputAdapter(t *testing.T) {
 	`
 	cache := prepareBrandNewCache()
 	cache.SetInputAdapter(NewCommandLineInputAdapter(strings.NewReader(testString), 0))
+
+	cache.InputAdapters[0].(*CommandLineInputAdapter).readFromStdin()
 
 	cache.CollectAdaptersData()
 	assert.Equal(t, int64(3), cache.Size(), "cache size not matching")

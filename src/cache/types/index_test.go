@@ -26,7 +26,7 @@ func TestItemsQueue(t *testing.T) {
 }
 
 func TestItemsQueue_Capacity(t *testing.T) {
-	queue := ItemsQueue{capacity: 2}
+	queue := ItemsQueue{Capacity: 2}
 	assert.True(t, queue.IsEmpty(), "queue should be empty")
 
 	queue.Enq(CacheItem{Key: "1", Value: "1"})
