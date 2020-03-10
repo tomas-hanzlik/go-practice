@@ -158,7 +158,7 @@ func TestCache_RandomInputAdapter(t *testing.T) {
 	out := capturer.CaptureStdout(func() {
 		cache.CollectAdaptersData()
 	})
-	assert.Contains(t, out, "Taken items from current batch:", "Stats() method should be called.")
+	assert.Contains(t, out, "Collecting items:", "Stats() method should be called.")
 	assert.NotEmpty(t, cache.Size(), "cache should have randomly generated items")
 	assert.True(t, cache.InputAdapters[0].(*RandomInputAdapter).queue.IsEmpty(), "adapter's queue should be empty")
 
